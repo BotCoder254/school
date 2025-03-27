@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 const Login = () => {
@@ -28,7 +28,7 @@ const Login = () => {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle();
+      await signInWithGoogle('student'); // Default role for Google sign-in
       toast.success('Successfully logged in with Google!');
       navigate('/dashboard');
     } catch (error) {
@@ -44,8 +44,8 @@ const Login = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          src="https://illustrations.popsy.co/white/student-work.svg"
-          alt="Learning illustration"
+          src="https://illustrations.popsy.co/white/student-desk.svg"
+          alt="Login illustration"
           className="w-2/3 h-auto"
         />
       </div>
@@ -93,7 +93,10 @@ const Login = () => {
 
               <div className="flex items-center justify-between">
                 <div className="text-sm">
-                  <Link to="/forgot-password" className="text-primary-500 hover:text-primary-400">
+                  <Link
+                    to="/reset-password"
+                    className="text-primary-500 hover:text-primary-400"
+                  >
                     Forgot your password?
                   </Link>
                 </div>

@@ -8,6 +8,7 @@ const Register = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [role, setRole] = useState('student');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { signUp, signInWithGoogle } = useAuth();
@@ -23,7 +24,7 @@ const Register = () => {
     }
 
     try {
-      await signUp(email, password);
+      await signUp(email, password, role);
       toast.success('Account created successfully!');
       navigate('/dashboard');
     } catch (error) {
@@ -35,7 +36,7 @@ const Register = () => {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle();
+      await signInWithGoogle(role);
       toast.success('Successfully registered with Google!');
       navigate('/dashboard');
     } catch (error) {
@@ -110,6 +111,22 @@ const Register = () => {
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 />
+              </div>
+
+              <div>
+                <label htmlFor="role" className="block text-sm font-medium text-gray-700">
+                  Role
+                </label>
+                <select
+                  id="role"
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                >
+                  <option value="student">Student</option>
+                  <option value="teacher">Teacher</option>
+                  <option value="admin">Admin</option>
+                </select>
               </div>
 
               <button

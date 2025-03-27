@@ -1,112 +1,125 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { collection, query, where, onSnapshot, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { db, storage } from '../config/firebase';
-import { useAuth } from '../context/AuthContext';
-import {
-  PlusIcon,
-  PaperClipIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-} from '@heroicons/react/24/outline';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { useAuth } from '../contexts/AuthContext';
+import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const AssignmentManagement = () => {
   const { user } = useAuth();
-  const [assignments, setAssignments] = useState([]);
-  const [classes, setClasses] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [classes, setClasses] = useState([]);
+  const [selectedClass, setSelectedClass] = useState('');
+  const [assignments, setAssignments] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
+  const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
     dueDate: '',
-    classId: '',
-    points: 100,
+    totalPoints: 100,
+    file: null,
   });
 
-  useEffect(() => {
-    if (!user?.email) return;
-
-    // Fetch classes
-    const classesQuery = query(
-      collection(db, 'classes'),
-      where('teacher', '==', user.email)
-    );
-
-    const unsubscribeClasses = onSnapshot(classesQuery, (snapshot) => {
-      const classesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setClasses(classesData);
-    });
-
-    // Fetch assignments
-    const assignmentsQuery = query(
-      collection(db, 'assignments'),
-      where('teacher', '==', user.email)
-    );
-
-    const unsubscribeAssignments = onSnapshot(assignmentsQuery, (snapshot) => {
+  const fetchAssignments = async () => {
+    if (!selectedClass) return;
+    
+    try {
+      setLoading(true);
+      const assignmentsQuery = query(
+        collection(db, 'assignments'),
+        where('classId', '==', selectedClass)
+      );
+      const snapshot = await getDocs(assignmentsQuery);
       const assignmentsData = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
+        ...doc.data()
       }));
       setAssignments(assignmentsData);
+
+      // Fetch submissions for all assignments
+      const submissionsData = [];
+      for (const assignment of assignmentsData) {
+        const submissionsQuery = query(
+          collection(db, 'submissions'),
+          where('assignmentId', '==', assignment.id)
+        );
+        const submissionsSnapshot = await getDocs(submissionsQuery);
+        submissionsData.push(...submissionsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })));
+      }
+      setSubmissions(submissionsData);
       setLoading(false);
-    });
-
-    return () => {
-      unsubscribeClasses();
-      unsubscribeAssignments();
-    };
-  }, [user?.email]);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+    } catch (error) {
+      console.error('Error fetching assignments:', error);
+      setLoading(false);
     }
   };
 
+  useEffect(() => {
+    const fetchClasses = async () => {
+      if (!user?.email) return;
+
+      try {
+        const classesQuery = query(
+          collection(db, 'classes'),
+          where('teacherEmail', '==', user.email)
+        );
+        const snapshot = await getDocs(classesQuery);
+        const classesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setClasses(classesData);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error fetching classes:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchClasses();
+  }, [user?.email]);
+
+  useEffect(() => {
+    fetchAssignments();
+  }, [selectedClass]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-
     try {
-      let fileUrl = null;
-      if (selectedFile) {
-        const fileRef = ref(storage, `assignments/${selectedFile.name}-${Date.now()}`);
-        await uploadBytes(fileRef, selectedFile);
+      setLoading(true);
+      let fileUrl = '';
+      
+      if (formData.file) {
+        const fileRef = ref(storage, `assignments/${selectedClass}/${formData.file.name}`);
+        await uploadBytes(fileRef, formData.file);
         fileUrl = await getDownloadURL(fileRef);
       }
 
       await addDoc(collection(db, 'assignments'), {
-        ...formData,
-        teacher: user.email,
+        classId: selectedClass,
+        title: formData.title,
+        description: formData.description,
+        dueDate: formData.dueDate,
+        totalPoints: Number(formData.totalPoints),
         fileUrl,
-        createdAt: new Date(),
-        status: 'active',
+        createdAt: new Date().toISOString(),
       });
 
-      setIsModalOpen(false);
       setFormData({
         title: '',
         description: '',
         dueDate: '',
-        classId: '',
-        points: 100,
+        totalPoints: 100,
+        file: null,
       });
-      setSelectedFile(null);
+      setShowForm(false);
+      fetchAssignments();
     } catch (error) {
       console.error('Error creating assignment:', error);
     } finally {
@@ -114,209 +127,196 @@ const AssignmentManagement = () => {
     }
   };
 
-  const handleGradeSubmission = async (assignmentId, submissionId, grade) => {
+  const handleGrade = async (submissionId, grade) => {
     try {
       await updateDoc(doc(db, 'submissions', submissionId), {
-        grade,
-        gradedAt: new Date(),
-        gradedBy: user.email,
+        grade: Number(grade),
+        gradedAt: new Date().toISOString(),
       });
+      
+      // Update local state
+      setSubmissions(prev => prev.map(sub => 
+        sub.id === submissionId ? { ...sub, grade: Number(grade) } : sub
+      ));
     } catch (error) {
       console.error('Error grading submission:', error);
     }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="container mx-auto px-4 py-8"
+      className="p-6"
     >
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-display font-bold text-gray-900">
-          Assignment Management
-        </h1>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+      <h1 className="text-2xl font-bold mb-6">Assignment Management</h1>
+      
+      <div className="mb-6">
+        <select
+          value={selectedClass}
+          onChange={(e) => setSelectedClass(e.target.value)}
+          className="w-full md:w-64 p-2 border rounded"
         >
-          <PlusIcon className="w-5 h-5 mr-2" />
-          Create Assignment
-        </button>
+          <option value="">Select a class</option>
+          {classes.map(cls => (
+            <option key={cls.id} value={cls.id}>
+              {cls.name}
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {assignments.map((assignment) => (
+      {selectedClass && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => setShowForm(!showForm)}
+          className="mb-6 bg-blue-600 text-white px-4 py-2 rounded flex items-center"
+        >
+          <PlusIcon className="w-5 h-5 mr-2" />
+          {showForm ? 'Cancel' : 'Create Assignment'}
+        </motion.button>
+      )}
+
+      {showForm && (
+        <motion.form
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: 'auto', opacity: 1 }}
+          className="mb-6 p-4 bg-white rounded shadow"
+          onSubmit={handleSubmit}
+        >
+          <div className="grid gap-4">
+            <input
+              type="text"
+              placeholder="Assignment Title"
+              value={formData.title}
+              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+              className="p-2 border rounded"
+              required
+            />
+            <textarea
+              placeholder="Description"
+              value={formData.description}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+              className="p-2 border rounded"
+              required
+            />
+            <input
+              type="date"
+              value={formData.dueDate}
+              onChange={(e) => setFormData(prev => ({ ...prev, dueDate: e.target.value }))}
+              className="p-2 border rounded"
+              required
+            />
+            <input
+              type="number"
+              placeholder="Total Points"
+              value={formData.totalPoints}
+              onChange={(e) => setFormData(prev => ({ ...prev, totalPoints: e.target.value }))}
+              className="p-2 border rounded"
+              required
+            />
+            <input
+              type="file"
+              onChange={(e) => setFormData(prev => ({ ...prev, file: e.target.files[0] }))}
+              className="p-2 border rounded"
+            />
+            <button
+              type="submit"
+              className="bg-green-600 text-white px-4 py-2 rounded"
+            >
+              Create Assignment
+            </button>
+          </div>
+        </motion.form>
+      )}
+
+      <div className="grid gap-6">
+        {assignments.map(assignment => (
           <motion.div
             key={assignment.id}
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="bg-white rounded-lg shadow-sm p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-white p-4 rounded shadow"
           >
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-lg font-medium text-gray-900">{assignment.title}</h3>
+                <h3 className="text-xl font-semibold">{assignment.title}</h3>
+                <p className="text-gray-600">{assignment.description}</p>
                 <p className="text-sm text-gray-500">
                   Due: {new Date(assignment.dueDate).toLocaleDateString()}
                 </p>
               </div>
-              {assignment.fileUrl && (
-                <a
-                  href={assignment.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 text-gray-500 hover:text-primary-500"
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {/* Implement edit */}}
+                  className="p-2 text-blue-600 hover:bg-blue-50 rounded"
                 >
-                  <PaperClipIcon className="w-5 h-5" />
-                </a>
-              )}
+                  <PencilIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {/* Implement delete */}}
+                  className="p-2 text-red-600 hover:bg-red-50 rounded"
+                >
+                  <TrashIcon className="w-5 h-5" />
+                </button>
+              </div>
             </div>
-            <p className="text-gray-600 mb-4">{assignment.description}</p>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">
-                Points: {assignment.points}
-              </span>
-              <span className={`px-3 py-1 rounded-full ${
-                assignment.status === 'active'
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {assignment.status}
-              </span>
+
+            <div className="mt-4">
+              <h4 className="font-semibold mb-2">Submissions</h4>
+              <div className="overflow-x-auto">
+                <table className="min-w-full">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="px-4 py-2 text-left">Student</th>
+                      <th className="px-4 py-2 text-left">Submitted At</th>
+                      <th className="px-4 py-2 text-left">Grade</th>
+                      <th className="px-4 py-2 text-left">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {submissions
+                      .filter(sub => sub.assignmentId === assignment.id)
+                      .map(submission => (
+                        <tr key={submission.id} className="border-t">
+                          <td className="px-4 py-2">{submission.studentEmail}</td>
+                          <td className="px-4 py-2">
+                            {new Date(submission.submittedAt).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2">
+                            <input
+                              type="number"
+                              value={submission.grade || ''}
+                              onChange={(e) => handleGrade(submission.id, e.target.value)}
+                              className="w-20 p-1 border rounded"
+                              max={assignment.totalPoints}
+                            />
+                            /{assignment.totalPoints}
+                          </td>
+                          <td className="px-4 py-2">
+                            <a
+                              href={submission.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline"
+                            >
+                              View Submission
+                            </a>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </motion.div>
         ))}
       </div>
-
-      <AnimatePresence>
-        {isModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              className="bg-white rounded-lg shadow-xl p-6 w-full max-w-lg"
-            >
-              <h2 className="text-xl font-display font-bold text-gray-900 mb-6">
-                Create New Assignment
-              </h2>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Title
-                  </label>
-                  <input
-                    type="text"
-                    name="title"
-                    value={formData.title}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Description
-                  </label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    rows="3"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Class
-                  </label>
-                  <select
-                    name="classId"
-                    value={formData.classId}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    required
-                  >
-                    <option value="">Select a class</option>
-                    {classes.map(classItem => (
-                      <option key={classItem.id} value={classItem.id}>
-                        {classItem.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Due Date
-                  </label>
-                  <input
-                    type="datetime-local"
-                    name="dueDate"
-                    value={formData.dueDate}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Points
-                  </label>
-                  <input
-                    type="number"
-                    name="points"
-                    value={formData.points}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    min="0"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Attachment
-                  </label>
-                  <input
-                    type="file"
-                    onChange={handleFileChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-                <div className="flex justify-end space-x-4 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
-                    disabled={loading}
-                  >
-                    {loading ? 'Creating...' : 'Create Assignment'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 };

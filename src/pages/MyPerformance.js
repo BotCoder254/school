@@ -67,15 +67,16 @@ const MyPerformance = () => {
         const enrollmentsSnapshot = await getDocs(enrollmentsQuery);
         const classIds = enrollmentsSnapshot.docs.map(doc => doc.data().classId);
 
-        // Fetch assignments, grades, and attendance data
-        const [assignmentsData, gradesData, attendanceData] = await Promise.all([
+        // Fetch assignments, grades, attendance, and participation data
+        const [assignmentsData, gradesData, attendanceData, participationData] = await Promise.all([
           fetchAssignments(classIds),
           fetchGrades(classIds),
           fetchAttendance(classIds),
+          fetchParticipation(classIds),
         ]);
 
         // Process and aggregate data
-        const processedData = processPerformanceData(assignmentsData, gradesData, attendanceData);
+        const processedData = processPerformanceData(assignmentsData, gradesData, attendanceData, participationData);
         setPerformanceData(processedData);
         setLoading(false);
       } catch (error) {
@@ -124,7 +125,22 @@ const MyPerformance = () => {
     return attendance;
   };
 
-  const processPerformanceData = (assignments, grades, attendance) => {
+  const fetchParticipation = async (classIds) => {
+    const participation = [];
+    for (const classId of classIds) {
+      const participationQuery = query(
+        collection(db, 'participation'),
+        where('classId', '==', classId),
+        where('studentEmail', '==', user.email),
+        orderBy('date', 'desc')
+      );
+      const snapshot = await getDocs(participationQuery);
+      participation.push(...snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }
+    return participation;
+  };
+
+  const processPerformanceData = (assignments, grades, attendance, participation) => {
     // Calculate overall stats
     const averageGrade = grades.length > 0
       ? grades.reduce((sum, grade) => sum + grade.score, 0) / grades.length
@@ -132,6 +148,10 @@ const MyPerformance = () => {
 
     const attendanceRate = attendance.length > 0
       ? (attendance.filter(record => record.status === 'present').length / attendance.length) * 100
+      : 0;
+
+    const participationRate = participation.length > 0
+      ? (participation.reduce((sum, record) => sum + record.score, 0) / participation.length)
       : 0;
 
     const completionRate = assignments.length > 0
@@ -143,6 +163,7 @@ const MyPerformance = () => {
       date: grade.date,
       grade: grade.score,
       attendance: attendance.find(a => a.date === grade.date)?.status === 'present' ? 100 : 0,
+      participation: participation.find(p => p.date === grade.date)?.score || 0,
     })).sort((a, b) => new Date(a.date) - new Date(b.date));
 
     // Generate skills data
@@ -150,7 +171,7 @@ const MyPerformance = () => {
       subject: metric,
       value: metric === 'Grades' ? averageGrade
         : metric === 'Attendance' ? attendanceRate
-        : metric === 'Participation' ? 75 // Example value
+        : metric === 'Participation' ? participationRate
         : completionRate,
     }));
 
@@ -175,7 +196,7 @@ const MyPerformance = () => {
       overallStats: {
         averageGrade,
         attendanceRate,
-        participationRate: 75, // Example value
+        participationRate,
         completionRate,
       },
       timelineData,
@@ -360,6 +381,14 @@ const MyPerformance = () => {
                   strokeWidth={2}
                   dot={{ r: 4 }}
                   name="Attendance"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="participation"
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                  name="Participation"
                 />
               </LineChart>
             </ResponsiveContainer>

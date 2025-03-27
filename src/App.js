@@ -67,8 +67,8 @@ const DashboardRedirect = () => {
 
 const App = () => {
   return (
-    <Router>
-      <AuthProvider>
+    <AuthProvider>
+      <Router>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
@@ -77,136 +77,72 @@ const App = () => {
           {/* Protected routes */}
           <Route
             path="/"
-            element={
-              <PrivateRoute>
-                <Layout />
-              </PrivateRoute>
-            }
+            element={<Layout />}
           >
             <Route index element={<DashboardRedirect />} />
             
             {/* Teacher routes */}
             <Route
               path="teacher-dashboard"
-              element={
-                <TeacherRoute>
-                  <TeacherDashboard />
-                </TeacherRoute>
-              }
+              element={<TeacherDashboard />}
             />
             <Route
               path="class-management"
-              element={
-                <TeacherRoute>
-                  <ClassManagement />
-                </TeacherRoute>
-              }
+              element={<ClassManagement />}
             />
             <Route
               path="timetable-management"
-              element={
-                <TeacherRoute>
-                  <TimetableManagement />
-                </TeacherRoute>
-              }
+              element={<TimetableManagement />}
             />
             <Route
               path="user-management"
-              element={
-                <TeacherRoute>
-                  <UserManagement />
-                </TeacherRoute>
-              }
+              element={<UserManagement />}
             />
             <Route
               path="assignment-management"
-              element={
-                <TeacherRoute>
-                  <AssignmentManagement />
-                </TeacherRoute>
-              }
+              element={<AssignmentManagement />}
             />
             <Route
               path="attendance-tracking"
-              element={
-                <TeacherRoute>
-                  <AttendanceTracking />
-                </TeacherRoute>
-              }
+              element={<AttendanceTracking />}
             />
             <Route
               path="analytics"
-              element={
-                <TeacherRoute>
-                  <Analytics />
-                </TeacherRoute>
-              }
+              element={<Analytics />}
             />
             <Route
               path="performance-analytics"
-              element={
-                <TeacherRoute>
-                  <PerformanceAnalytics />
-                </TeacherRoute>
-              }
+              element={<PerformanceAnalytics />}
             />
 
             {/* Student routes */}
             <Route
               path="student-dashboard"
-              element={
-                <StudentRoute>
-                  <StudentDashboard />
-                </StudentRoute>
-              }
+              element={<StudentDashboard />}
             />
             <Route
               path="my-classes"
-              element={
-                <StudentRoute>
-                  <ClassManagement />
-                </StudentRoute>
-              }
+              element={<ClassManagement />}
             />
             <Route
               path="my-schedule"
-              element={
-                <StudentRoute>
-                  <TimetableManagement />
-                </StudentRoute>
-              }
+              element={<TimetableManagement />}
             />
             <Route
               path="my-assignments"
-              element={
-                <StudentRoute>
-                  <MyAssignments />
-                </StudentRoute>
-              }
+              element={<MyAssignments />}
             />
             <Route
               path="my-attendance"
-              element={
-                <StudentRoute>
-                  <MyAttendance />
-                </StudentRoute>
-              }
+              element={<MyAttendance />}
             />
             <Route
               path="my-performance"
-              element={
-                <StudentRoute>
-                  <MyPerformance />
-                </StudentRoute>
-              }
+              element={<MyPerformance />}
             />
             <Route
               path="my-grades"
-              element={
-                <StudentRoute>
-                  <MyGrades />
-                </StudentRoute>
-              }
+              element={<MyGrades />}
             />
 
             {/* Common routes */}
@@ -215,8 +151,8 @@ const App = () => {
             <Route path="settings" element={<DashboardRedirect />} />
           </Route>
         </Routes>
-      </AuthProvider>
-    </Router>
+      </Router>
+    </AuthProvider>
   );
 };
 
