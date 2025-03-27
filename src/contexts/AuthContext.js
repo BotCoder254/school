@@ -12,7 +12,18 @@ import {
 } from '../config/firebase';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
-const AuthContext = createContext();
+const defaultAuthContext = {
+  user: null,
+  loading: true,
+  error: '',
+  signUp: async () => {},
+  signIn: async () => {},
+  signInWithGoogle: async () => {},
+  resetPassword: async () => {},
+  logout: async () => {},
+};
+
+const AuthContext = createContext(defaultAuthContext);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -29,22 +40,28 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        // Get user role from Firestore
-        const userDoc = await getDoc(doc(db, 'users', user.email));
-        const userData = userDoc.data() || {};
-        
-        setUser({
-          ...user,
-          role: userData.role || 'student', // Default to student if no role is set
-        });
-      } else {
+      try {
+        if (user) {
+          // Get user role from Firestore
+          const userDoc = await getDoc(doc(db, 'users', user.email));
+          const userData = userDoc.data() || {};
+          
+          setUser({
+            ...user,
+            role: userData.role || 'student',
+          });
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
         setUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return unsubscribe;
+    return () => unsubscribe();
   }, []);
 
   const signUp = async (email, password, role) => {
@@ -142,7 +159,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 };

@@ -1,17 +1,28 @@
-import { Outlet } from 'react-router-dom';
+import React from 'react';
+import { Outlet, Navigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import Sidebar from './Sidebar';
-import { Toaster } from 'react-hot-toast';
+import LoadingSpinner from '../LoadingSpinner';
 
 const Layout = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
       <Sidebar />
-      <main className="flex-1 overflow-auto">
-        <div className="container mx-auto px-6 py-8">
+      <main className="lg:pl-64">
+        <div className="max-w-7xl mx-auto">
           <Outlet />
         </div>
       </main>
-      <Toaster position="top-right" />
     </div>
   );
 };

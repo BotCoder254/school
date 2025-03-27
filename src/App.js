@@ -17,6 +17,7 @@ import Announcements from './pages/Announcements';
 import MyGrades from './pages/MyGrades';
 import PerformanceAnalytics from './pages/PerformanceAnalytics';
 import MyPerformance from './pages/MyPerformance';
+import ResetPassword from './pages/ResetPassword';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -67,12 +68,13 @@ const DashboardRedirect = () => {
 
 const App = () => {
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <Routes>
           {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
 
           {/* Protected routes */}
           <Route
@@ -151,8 +153,8 @@ const App = () => {
             <Route path="settings" element={<DashboardRedirect />} />
           </Route>
         </Routes>
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   );
 };
 
