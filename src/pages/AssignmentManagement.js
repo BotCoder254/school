@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { db, storage } from '../config/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, onSnapshot } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -23,61 +23,34 @@ const AssignmentManagement = () => {
     file: null,
   });
 
-  const fetchAssignments = async () => {
-    if (!selectedClass) return;
-    
-    try {
-      setLoading(true);
-      const assignmentsQuery = query(
-        collection(db, 'assignments'),
-        where('classId', '==', selectedClass)
-      );
-      const snapshot = await getDocs(assignmentsQuery);
-      const assignmentsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setAssignments(assignmentsData);
-
-      // Fetch submissions for all assignments
-      const submissionsData = [];
-      for (const assignment of assignmentsData) {
-        const submissionsQuery = query(
-          collection(db, 'submissions'),
-          where('assignmentId', '==', assignment.id)
-        );
-        const submissionsSnapshot = await getDocs(submissionsQuery);
-        submissionsData.push(...submissionsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })));
-      }
-      setSubmissions(submissionsData);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching assignments:', error);
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    const fetchClasses = async () => {
-      if (!user?.email) return;
+    if (!user?.email) return;
 
+    const fetchClasses = async () => {
       try {
         const classesQuery = query(
           collection(db, 'classes'),
           where('teacherEmail', '==', user.email)
         );
-        const snapshot = await getDocs(classesQuery);
-        const classesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setClasses(classesData);
-        setLoading(false);
+        
+        const unsubscribe = onSnapshot(classesQuery, (snapshot) => {
+          const classesData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setClasses(classesData);
+          if (classesData.length > 0 && !selectedClass) {
+            setSelectedClass(classesData[0].id);
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error('Error fetching classes:', error);
+          setLoading(false);
+        });
+
+        return () => unsubscribe();
       } catch (error) {
-        console.error('Error fetching classes:', error);
+        console.error('Error setting up classes listener:', error);
         setLoading(false);
       }
     };
@@ -86,11 +59,64 @@ const AssignmentManagement = () => {
   }, [user?.email]);
 
   useEffect(() => {
-    fetchAssignments();
+    if (!selectedClass) return;
+
+    const fetchAssignmentsAndSubmissions = async () => {
+      try {
+        setLoading(true);
+        
+        // Set up real-time listener for assignments
+        const assignmentsQuery = query(
+          collection(db, 'assignments'),
+          where('classId', '==', selectedClass)
+        );
+        
+        const unsubscribeAssignments = onSnapshot(assignmentsQuery, async (snapshot) => {
+          const assignmentsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setAssignments(assignmentsData);
+
+          // Fetch submissions for all assignments
+          const submissionsPromises = assignmentsData.map(assignment => {
+            const submissionsQuery = query(
+              collection(db, 'submissions'),
+              where('assignmentId', '==', assignment.id)
+            );
+            return getDocs(submissionsQuery);
+          });
+
+          const submissionsSnapshots = await Promise.all(submissionsPromises);
+          const submissionsData = submissionsSnapshots.flatMap(snapshot =>
+            snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }))
+          );
+          setSubmissions(submissionsData);
+          setLoading(false);
+        }, (error) => {
+          console.error('Error fetching assignments:', error);
+          setLoading(false);
+        });
+
+        return () => {
+          unsubscribeAssignments();
+        };
+      } catch (error) {
+        console.error('Error setting up assignments listener:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchAssignmentsAndSubmissions();
   }, [selectedClass]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selectedClass) return;
+
     try {
       setLoading(true);
       let fileUrl = '';
@@ -109,6 +135,7 @@ const AssignmentManagement = () => {
         totalPoints: Number(formData.totalPoints),
         fileUrl,
         createdAt: new Date().toISOString(),
+        teacherEmail: user.email,
       });
 
       setFormData({
@@ -119,7 +146,6 @@ const AssignmentManagement = () => {
         file: null,
       });
       setShowForm(false);
-      fetchAssignments();
     } catch (error) {
       console.error('Error creating assignment:', error);
     } finally {
@@ -128,16 +154,14 @@ const AssignmentManagement = () => {
   };
 
   const handleGrade = async (submissionId, grade) => {
+    if (!submissionId) return;
+    
     try {
       await updateDoc(doc(db, 'submissions', submissionId), {
         grade: Number(grade),
         gradedAt: new Date().toISOString(),
+        gradedBy: user.email,
       });
-      
-      // Update local state
-      setSubmissions(prev => prev.map(sub => 
-        sub.id === submissionId ? { ...sub, grade: Number(grade) } : sub
-      ));
     } catch (error) {
       console.error('Error grading submission:', error);
     }

@@ -73,6 +73,8 @@ const PerformanceAnalytics = () => {
 
   useEffect(() => {
     const fetchClasses = async () => {
+      if (!user?.email) return;
+
       try {
         const classesQuery = query(
           collection(db, 'classes'),
@@ -81,7 +83,7 @@ const PerformanceAnalytics = () => {
         const snapshot = await getDocs(classesQuery);
         const classesData = snapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data(),
+          ...doc.data()
         }));
         setClasses(classesData);
         if (classesData.length > 0) {
@@ -93,7 +95,7 @@ const PerformanceAnalytics = () => {
     };
 
     fetchClasses();
-  }, [user.email]);
+  }, [user?.email]);
 
   useEffect(() => {
     const fetchAnalytics = async () => {
@@ -101,22 +103,30 @@ const PerformanceAnalytics = () => {
 
       try {
         setLoading(true);
-
-        // Fetch all relevant data
         const [enrollments, assignments, attendance] = await Promise.all([
           fetchEnrollments(),
           fetchAssignments(),
           fetchAttendance(),
         ]);
 
-        // Process and aggregate data
         const processedData = processAnalyticsData(enrollments, assignments, attendance);
-        
         setPerformanceData(processedData);
-        setOverallStats(calculateOverallStats(processedData));
-        setLoading(false);
+        
+        // Calculate overall stats
+        setOverallStats({
+          totalStudents: enrollments.length,
+          averageGrade: processedData.classAverages.reduce((acc, curr) => acc + curr.average, 0) / 
+            (processedData.classAverages.length || 1),
+          topPerformers: processedData.studentDistribution[0].value,
+          needsImprovement: processedData.studentDistribution[3].value,
+          attendanceRate: processedData.classAverages.reduce((acc, curr) => acc + curr.attendance, 0) / 
+            (processedData.classAverages.length || 1),
+          participationRate: processedData.classAverages.reduce((acc, curr) => acc + curr.participation, 0) / 
+            (processedData.classAverages.length || 1),
+        });
       } catch (error) {
         console.error('Error fetching analytics:', error);
+      } finally {
         setLoading(false);
       }
     };
@@ -125,15 +135,22 @@ const PerformanceAnalytics = () => {
   }, [selectedClass, selectedTimeRange, filters]);
 
   const fetchEnrollments = async () => {
+    if (!selectedClass) return [];
+    
     const enrollmentsQuery = query(
       collection(db, 'enrollments'),
       where('classId', '==', selectedClass)
     );
     const snapshot = await getDocs(enrollmentsQuery);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   };
 
   const fetchAssignments = async () => {
+    if (!selectedClass) return [];
+    
     const assignmentsQuery = query(
       collection(db, 'assignments'),
       where('classId', '==', selectedClass),
@@ -141,10 +158,15 @@ const PerformanceAnalytics = () => {
       limit(50)
     );
     const snapshot = await getDocs(assignmentsQuery);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   };
 
   const fetchAttendance = async () => {
+    if (!selectedClass) return [];
+    
     const attendanceQuery = query(
       collection(db, 'attendance'),
       where('classId', '==', selectedClass),
@@ -152,62 +174,68 @@ const PerformanceAnalytics = () => {
       limit(50)
     );
     const snapshot = await getDocs(attendanceQuery);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-  };
-
-  const processAnalyticsData = (enrollments, assignments, attendance) => {
-    // Calculate various metrics
-    const studentPerformance = calculateStudentPerformance(enrollments, assignments, attendance);
-    const timelineData = generateTimelineData(assignments, attendance);
-    const skillsData = generateSkillsData(assignments);
-    const attendanceData = processAttendanceData(attendance);
-
-    return {
-      classAverages: studentPerformance.averages,
-      studentDistribution: studentPerformance.distribution,
-      timelineData,
-      skillsData,
-      attendanceData,
-    };
-  };
-
-  const calculateStudentPerformance = (enrollments, assignments, attendance) => {
-    // Implementation for student performance calculation
-    // Returns processed data for charts and tables
-    return {
-      averages: [],
-      distribution: []
-    };
-  };
-
-  const generateTimelineData = (assignments, attendance) => {
-    // Implementation for timeline data generation
-    return [];
-  };
-
-  const generateSkillsData = (assignments) => {
-    // Implementation for skills data generation
-    return PERFORMANCE_METRICS.map(metric => ({
-      subject: metric,
-      A: Math.random() * 100,
-      fullMark: 100,
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
     }));
   };
 
-  const processAttendanceData = (attendance) => {
-    // Implementation for attendance data processing
-    return [];
-  };
+  const processAnalyticsData = (enrollments, assignments, attendance) => {
+    // Calculate class averages
+    const classAverages = enrollments.map(enrollment => {
+      const studentAssignments = assignments.filter(a => 
+        a.submissions?.some(s => s.studentId === enrollment.studentId)
+      );
+      
+      const average = studentAssignments.reduce((acc, curr) => {
+        const submission = curr.submissions?.find(s => s.studentId === enrollment.studentId);
+        return acc + (submission?.grade || 0);
+      }, 0) / (studentAssignments.length || 1);
 
-  const calculateOverallStats = (data) => {
-    // Implementation for overall stats calculation
+      const studentAttendance = attendance.filter(a => 
+        a.attendees?.includes(enrollment.studentId)
+      ).length;
+
+      return {
+        email: enrollment.studentEmail,
+        average: average,
+        attendance: (studentAttendance / attendance.length) * 100,
+        participation: Math.random() * 100, // Replace with actual participation data
+      };
+    });
+
+    // Calculate student distribution
+    const distribution = [
+      { name: 'Excellent', value: 0 },
+      { name: 'Good', value: 0 },
+      { name: 'Average', value: 0 },
+      { name: 'Needs Improvement', value: 0 },
+    ];
+
+    classAverages.forEach(student => {
+      if (student.average >= 90) distribution[0].value++;
+      else if (student.average >= 80) distribution[1].value++;
+      else if (student.average >= 70) distribution[2].value++;
+      else distribution[3].value++;
+    });
+
+    // Generate timeline data
+    const timelineData = assignments.map(assignment => ({
+      date: assignment.dueDate,
+      grades: assignment.submissions?.reduce((acc, curr) => acc + (curr.grade || 0), 0) / 
+        (assignment.submissions?.length || 1),
+      attendance: Math.random() * 100, // Replace with actual attendance data
+    }));
+
     return {
-      totalStudents: 0,
-      averageGrade: 0,
-      topPerformers: 0,
-      needsImprovement: 0,
-      attendanceRate: 0,
-      participationRate: 0,
+      classAverages,
+      studentDistribution: distribution,
+      timelineData,
+      skillsData: PERFORMANCE_METRICS.map(metric => ({
+        subject: metric,
+        A: Math.random() * 100,
+        fullMark: 100,
+      })),
     };
   };
 
