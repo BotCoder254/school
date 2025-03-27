@@ -1,10 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { db, storage } from '../config/firebase';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  deleteDoc,
+  doc, 
+  onSnapshot,
+  serverTimestamp 
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { useAuth } from '../context/AuthContext';
-import { PlusIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { 
+  PlusIcon, 
+  PencilIcon, 
+  TrashIcon, 
+  CloudArrowUpIcon,
+  CheckCircleIcon,
+  XCircleIcon 
+} from '@heroicons/react/24/outline';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 const AssignmentManagement = () => {
@@ -15,6 +33,7 @@ const AssignmentManagement = () => {
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editingAssignment, setEditingAssignment] = useState(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -22,6 +41,7 @@ const AssignmentManagement = () => {
     totalPoints: 100,
     file: null,
   });
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     if (!user?.email) return;
@@ -43,14 +63,12 @@ const AssignmentManagement = () => {
             setSelectedClass(classesData[0].id);
           }
           setLoading(false);
-        }, (error) => {
-          console.error('Error fetching classes:', error);
-          setLoading(false);
         });
 
         return () => unsubscribe();
       } catch (error) {
-        console.error('Error setting up classes listener:', error);
+        console.error('Error fetching classes:', error);
+        setError('Failed to load classes');
         setLoading(false);
       }
     };
@@ -65,7 +83,6 @@ const AssignmentManagement = () => {
       try {
         setLoading(true);
         
-        // Set up real-time listener for assignments
         const assignmentsQuery = query(
           collection(db, 'assignments'),
           where('classId', '==', selectedClass)
@@ -96,16 +113,12 @@ const AssignmentManagement = () => {
           );
           setSubmissions(submissionsData);
           setLoading(false);
-        }, (error) => {
-          console.error('Error fetching assignments:', error);
-          setLoading(false);
         });
 
-        return () => {
-          unsubscribeAssignments();
-        };
+        return () => unsubscribeAssignments();
       } catch (error) {
-        console.error('Error setting up assignments listener:', error);
+        console.error('Error fetching assignments:', error);
+        setError('Failed to load assignments');
         setLoading(false);
       }
     };
@@ -119,6 +132,7 @@ const AssignmentManagement = () => {
 
     try {
       setLoading(true);
+      setError(null);
       let fileUrl = '';
       
       if (formData.file) {
@@ -127,16 +141,23 @@ const AssignmentManagement = () => {
         fileUrl = await getDownloadURL(fileRef);
       }
 
-      await addDoc(collection(db, 'assignments'), {
+      const assignmentData = {
         classId: selectedClass,
         title: formData.title,
         description: formData.description,
         dueDate: formData.dueDate,
         totalPoints: Number(formData.totalPoints),
         fileUrl,
-        createdAt: new Date().toISOString(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         teacherEmail: user.email,
-      });
+      };
+
+      if (editingAssignment) {
+        await updateDoc(doc(db, 'assignments', editingAssignment.id), assignmentData);
+      } else {
+        await addDoc(collection(db, 'assignments'), assignmentData);
+      }
 
       setFormData({
         title: '',
@@ -146,24 +167,73 @@ const AssignmentManagement = () => {
         file: null,
       });
       setShowForm(false);
+      setEditingAssignment(null);
     } catch (error) {
-      console.error('Error creating assignment:', error);
+      console.error('Error saving assignment:', error);
+      setError('Failed to save assignment');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGrade = async (submissionId, grade) => {
+  const handleEdit = (assignment) => {
+    setEditingAssignment(assignment);
+    setFormData({
+      title: assignment.title,
+      description: assignment.description,
+      dueDate: assignment.dueDate,
+      totalPoints: assignment.totalPoints,
+      file: null,
+    });
+    setShowForm(true);
+  };
+
+  const handleDelete = async (assignmentId, fileUrl) => {
+    if (!window.confirm('Are you sure you want to delete this assignment?')) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Delete the assignment document
+      await deleteDoc(doc(db, 'assignments', assignmentId));
+
+      // Delete the file from storage if it exists
+      if (fileUrl) {
+        const fileRef = ref(storage, fileUrl);
+        await deleteObject(fileRef);
+      }
+
+      // Delete all submissions for this assignment
+      const submissionsQuery = query(
+        collection(db, 'submissions'),
+        where('assignmentId', '==', assignmentId)
+      );
+      const submissionsSnapshot = await getDocs(submissionsQuery);
+      const deletePromises = submissionsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+    } catch (error) {
+      console.error('Error deleting assignment:', error);
+      setError('Failed to delete assignment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGrade = async (submissionId, grade, feedback = '') => {
     if (!submissionId) return;
     
     try {
+      setError(null);
       await updateDoc(doc(db, 'submissions', submissionId), {
         grade: Number(grade),
-        gradedAt: new Date().toISOString(),
+        feedback,
+        gradedAt: serverTimestamp(),
         gradedBy: user.email,
       });
     } catch (error) {
       console.error('Error grading submission:', error);
+      setError('Failed to save grade');
     }
   };
 
@@ -253,7 +323,7 @@ const AssignmentManagement = () => {
               type="submit"
               className="bg-green-600 text-white px-4 py-2 rounded"
             >
-              Create Assignment
+              {editingAssignment ? 'Update Assignment' : 'Create Assignment'}
             </button>
           </div>
         </motion.form>
@@ -277,13 +347,13 @@ const AssignmentManagement = () => {
               </div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => {/* Implement edit */}}
+                  onClick={() => handleEdit(assignment)}
                   className="p-2 text-blue-600 hover:bg-blue-50 rounded"
                 >
                   <PencilIcon className="w-5 h-5" />
                 </button>
                 <button
-                  onClick={() => {/* Implement delete */}}
+                  onClick={() => handleDelete(assignment.id, assignment.fileUrl)}
                   className="p-2 text-red-600 hover:bg-red-50 rounded"
                 >
                   <TrashIcon className="w-5 h-5" />
