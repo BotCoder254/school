@@ -13,6 +13,14 @@ const Register = () => {
   const navigate = useNavigate();
   const { signUp, signInWithGoogle } = useAuth();
 
+  const handleNavigation = (userRole) => {
+    if (userRole === 'teacher') {
+      navigate('/teacher-dashboard');
+    } else {
+      navigate('/student-dashboard');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -26,9 +34,10 @@ const Register = () => {
     try {
       await signUp(email, password, role);
       toast.success('Account created successfully!');
-      navigate('/dashboard');
+      handleNavigation(role);
     } catch (error) {
-      toast.error(error.message);
+      console.error('Registration error:', error);
+      toast.error(error.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }
@@ -38,9 +47,10 @@ const Register = () => {
     try {
       await signInWithGoogle(role);
       toast.success('Successfully registered with Google!');
-      navigate('/dashboard');
+      handleNavigation(role);
     } catch (error) {
-      toast.error(error.message);
+      console.error('Google sign-in error:', error);
+      toast.error(error.message || 'Failed to sign in with Google');
     }
   };
 
@@ -125,7 +135,6 @@ const Register = () => {
                 >
                   <option value="student">Student</option>
                   <option value="teacher">Teacher</option>
-                  <option value="admin">Admin</option>
                 </select>
               </div>
 

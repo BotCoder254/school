@@ -19,12 +19,14 @@ const TeacherDashboard = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user?.email) return;
+
     const fetchData = async () => {
       try {
         // Fetch classes
         const classesQuery = query(
           collection(db, 'classes'),
-          where('teacher', '==', user.email)
+          where('teacherEmail', '==', user.email)
         );
         const unsubscribeClasses = onSnapshot(classesQuery, (snapshot) => {
           const classesData = snapshot.docs.map(doc => ({
@@ -51,7 +53,7 @@ const TeacherDashboard = () => {
         // Fetch assignments
         const assignmentsQuery = query(
           collection(db, 'assignments'),
-          where('teacher', '==', user.email),
+          where('teacherEmail', '==', user.email),
           orderBy('dueDate', 'desc'),
           limit(5)
         );
@@ -91,47 +93,22 @@ const TeacherDashboard = () => {
       }
     };
 
-    if (user?.email) {
-      fetchData();
-    }
+    fetchData();
   }, [user?.email]);
-
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-    },
-  };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
       </div>
     );
   }
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-      className="space-y-8"
-    >
+    <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-display font-bold text-gray-900">
-          Welcome back, {user.displayName || user.email}!
+          Welcome back, {user?.displayName || user?.email}!
         </h1>
         <p className="mt-2 text-sm text-gray-600">
           Here's what's happening in your classes today
@@ -140,7 +117,8 @@ const TeacherDashboard = () => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <motion.div
-          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-lg shadow-sm p-6"
         >
           <div className="flex items-center space-x-3">
@@ -155,7 +133,9 @@ const TeacherDashboard = () => {
         </motion.div>
 
         <motion.div
-          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
           className="bg-white rounded-lg shadow-sm p-6"
         >
           <div className="flex items-center space-x-3">
@@ -170,7 +150,9 @@ const TeacherDashboard = () => {
         </motion.div>
 
         <motion.div
-          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
           className="bg-white rounded-lg shadow-sm p-6"
         >
           <div className="flex items-center space-x-3">
@@ -185,7 +167,9 @@ const TeacherDashboard = () => {
         </motion.div>
 
         <motion.div
-          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
           className="bg-white rounded-lg shadow-sm p-6"
         >
           <div className="flex items-center space-x-3">
@@ -201,7 +185,12 @@ const TeacherDashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <motion.div variants={itemVariants} className="bg-white rounded-lg shadow-sm p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="bg-white rounded-lg shadow-sm p-6"
+        >
           <h2 className="text-lg font-display font-bold text-gray-900 mb-4">Recent Classes</h2>
           <div className="space-y-4">
             {classes.map((classItem) => (
@@ -221,10 +210,18 @@ const TeacherDashboard = () => {
                 <p className="text-sm text-gray-500">{classItem.schedule}</p>
               </div>
             ))}
+            {classes.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">No classes found</p>
+            )}
           </div>
         </motion.div>
 
-        <motion.div variants={itemVariants} className="bg-white rounded-lg shadow-sm p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-white rounded-lg shadow-sm p-6"
+        >
           <h2 className="text-lg font-display font-bold text-gray-900 mb-4">Recent Announcements</h2>
           <div className="space-y-4">
             {announcements.map((announcement) => (
@@ -238,61 +235,17 @@ const TeacherDashboard = () => {
                 </div>
                 <p className="text-sm text-gray-600">{announcement.content}</p>
                 <p className="text-xs text-gray-500 mt-2">
-                  {announcement.createdAt ? new Date(announcement.createdAt.seconds * 1000).toLocaleDateString() : 'No date'}
+                  {announcement.createdAt?.toDate().toLocaleDateString() || 'No date'}
                 </p>
               </div>
             ))}
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-display font-bold text-gray-900 mb-4">Recent Assignments</h2>
-          <div className="space-y-4">
-            {assignments.map((assignment) => (
-              <div
-                key={assignment.id}
-                className="p-4 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-2">
-                    <ClipboardDocumentListIcon className="w-4 h-4 text-primary-500" />
-                    <p className="font-medium text-gray-900">{assignment.title}</p>
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    Due: {assignment.dueDate ? new Date(assignment.dueDate.seconds * 1000).toLocaleDateString() : 'No due date'}
-                  </p>
-                </div>
-                <p className="text-sm text-gray-600">{assignment.description}</p>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="bg-white rounded-lg shadow-sm p-6">
-          <h2 className="text-lg font-display font-bold text-gray-900 mb-4">Recent Students</h2>
-          <div className="space-y-4">
-            {students.map((student) => (
-              <div
-                key={student.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={student.photoURL || `https://ui-avatars.com/api/?name=${student.name}`}
-                    alt={student.name}
-                    className="w-8 h-8 rounded-full"
-                  />
-                  <div>
-                    <p className="font-medium text-gray-900">{student.name}</p>
-                    <p className="text-sm text-gray-500">{student.email}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {announcements.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">No announcements found</p>
+            )}
           </div>
         </motion.div>
       </div>
-    </motion.div>
+    </div>
   );
 };
 

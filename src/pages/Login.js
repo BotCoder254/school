@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -11,16 +13,28 @@ const Login = () => {
   const navigate = useNavigate();
   const { signIn, signInWithGoogle } = useAuth();
 
+  const handleNavigation = (userRole) => {
+    if (userRole === 'teacher') {
+      navigate('/teacher-dashboard');
+    } else {
+      navigate('/student-dashboard');
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      await signIn(email, password);
+      const { user } = await signIn(email, password);
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const role = userDoc.exists() ? userDoc.data().role : 'student';
+      
       toast.success('Successfully logged in!');
-      navigate('/dashboard');
+      handleNavigation(role);
     } catch (error) {
-      toast.error(error.message);
+      console.error('Login error:', error);
+      toast.error(error.message || 'Failed to log in');
     } finally {
       setLoading(false);
     }
@@ -28,11 +42,15 @@ const Login = () => {
 
   const handleGoogleSignIn = async () => {
     try {
-      await signInWithGoogle('student'); // Default role for Google sign-in
+      const { user } = await signInWithGoogle();
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const role = userDoc.exists() ? userDoc.data().role : 'student';
+      
       toast.success('Successfully logged in with Google!');
-      navigate('/dashboard');
+      handleNavigation(role);
     } catch (error) {
-      toast.error(error.message);
+      console.error('Google sign-in error:', error);
+      toast.error(error.message || 'Failed to sign in with Google');
     }
   };
 
@@ -44,7 +62,7 @@ const Login = () => {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8 }}
-          src="https://illustrations.popsy.co/white/student-desk.svg"
+          src="https://illustrations.popsy.co/white/unlock.svg"
           alt="Login illustration"
           className="w-2/3 h-auto"
         />
@@ -93,10 +111,7 @@ const Login = () => {
 
               <div className="flex items-center justify-between">
                 <div className="text-sm">
-                  <Link
-                    to="/reset-password"
-                    className="text-primary-500 hover:text-primary-400"
-                  >
+                  <Link to="/reset-password" className="text-primary-500 hover:text-primary-400">
                     Forgot your password?
                   </Link>
                 </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -49,16 +49,9 @@ const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logOut } = useAuth();
-  const [isTeacher, setIsTeacher] = useState(false);
+  const { user, userRole, logOut } = useAuth();
 
-  useEffect(() => {
-    if (user?.email) {
-      setIsTeacher(user.email.endsWith('@teacher.edu'));
-    }
-  }, [user?.email]);
-
-  const menuItems = isTeacher ? teacherMenuItems : studentMenuItems;
+  const menuItems = userRole === 'teacher' ? teacherMenuItems : studentMenuItems;
 
   const handleLogout = async () => {
     try {
@@ -149,7 +142,7 @@ const Sidebar = () => {
                   {user?.displayName || user?.email}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {isTeacher ? 'Teacher' : 'Student'}
+                  {userRole === 'teacher' ? 'Teacher' : 'Student'}
                 </p>
               </motion.div>
             )}

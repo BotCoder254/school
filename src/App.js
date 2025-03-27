@@ -38,10 +38,9 @@ const PrivateRoute = ({ children }) => {
 };
 
 const TeacherRoute = ({ children }) => {
-  const { user } = useAuth();
-  const isTeacher = user?.email?.endsWith('@teacher.edu');
+  const { userRole } = useAuth();
 
-  if (!isTeacher) {
+  if (userRole !== 'teacher') {
     return <Navigate to="/student-dashboard" />;
   }
 
@@ -49,10 +48,9 @@ const TeacherRoute = ({ children }) => {
 };
 
 const StudentRoute = ({ children }) => {
-  const { user } = useAuth();
-  const isStudent = !user?.email?.endsWith('@teacher.edu');
+  const { userRole } = useAuth();
 
-  if (!isStudent) {
+  if (userRole !== 'student') {
     return <Navigate to="/teacher-dashboard" />;
   }
 
@@ -60,10 +58,9 @@ const StudentRoute = ({ children }) => {
 };
 
 const DashboardRedirect = () => {
-  const { user } = useAuth();
-  const isTeacher = user?.email?.endsWith('@teacher.edu');
+  const { userRole } = useAuth();
   
-  return <Navigate to={isTeacher ? "/teacher-dashboard" : "/student-dashboard"} replace />;
+  return <Navigate to={userRole === 'teacher' ? "/teacher-dashboard" : "/student-dashboard"} replace />;
 };
 
 const App = () => {
@@ -79,72 +76,136 @@ const App = () => {
           {/* Protected routes */}
           <Route
             path="/"
-            element={<Layout />}
+            element={
+              <PrivateRoute>
+                <Layout />
+              </PrivateRoute>
+            }
           >
             <Route index element={<DashboardRedirect />} />
             
             {/* Teacher routes */}
             <Route
               path="teacher-dashboard"
-              element={<TeacherDashboard />}
+              element={
+                <TeacherRoute>
+                  <TeacherDashboard />
+                </TeacherRoute>
+              }
             />
             <Route
               path="class-management"
-              element={<ClassManagement />}
+              element={
+                <TeacherRoute>
+                  <ClassManagement />
+                </TeacherRoute>
+              }
             />
             <Route
               path="timetable-management"
-              element={<TimetableManagement />}
+              element={
+                <TeacherRoute>
+                  <TimetableManagement />
+                </TeacherRoute>
+              }
             />
             <Route
               path="user-management"
-              element={<UserManagement />}
+              element={
+                <TeacherRoute>
+                  <UserManagement />
+                </TeacherRoute>
+              }
             />
             <Route
               path="assignment-management"
-              element={<AssignmentManagement />}
+              element={
+                <TeacherRoute>
+                  <AssignmentManagement />
+                </TeacherRoute>
+              }
             />
             <Route
               path="attendance-tracking"
-              element={<AttendanceTracking />}
+              element={
+                <TeacherRoute>
+                  <AttendanceTracking />
+                </TeacherRoute>
+              }
             />
             <Route
               path="analytics"
-              element={<Analytics />}
+              element={
+                <TeacherRoute>
+                  <Analytics />
+                </TeacherRoute>
+              }
             />
             <Route
               path="performance-analytics"
-              element={<PerformanceAnalytics />}
+              element={
+                <TeacherRoute>
+                  <PerformanceAnalytics />
+                </TeacherRoute>
+              }
             />
 
             {/* Student routes */}
             <Route
               path="student-dashboard"
-              element={<StudentDashboard />}
+              element={
+                <StudentRoute>
+                  <StudentDashboard />
+                </StudentRoute>
+              }
             />
             <Route
               path="my-classes"
-              element={<ClassManagement />}
+              element={
+                <StudentRoute>
+                  <ClassManagement />
+                </StudentRoute>
+              }
             />
             <Route
               path="my-schedule"
-              element={<TimetableManagement />}
+              element={
+                <StudentRoute>
+                  <TimetableManagement />
+                </StudentRoute>
+              }
             />
             <Route
               path="my-assignments"
-              element={<MyAssignments />}
+              element={
+                <StudentRoute>
+                  <MyAssignments />
+                </StudentRoute>
+              }
             />
             <Route
               path="my-attendance"
-              element={<MyAttendance />}
+              element={
+                <StudentRoute>
+                  <MyAttendance />
+                </StudentRoute>
+              }
             />
             <Route
               path="my-performance"
-              element={<MyPerformance />}
+              element={
+                <StudentRoute>
+                  <MyPerformance />
+                </StudentRoute>
+              }
             />
             <Route
               path="my-grades"
-              element={<MyGrades />}
+              element={
+                <StudentRoute>
+                  <MyGrades />
+                </StudentRoute>
+              }
             />
 
             {/* Common routes */}
